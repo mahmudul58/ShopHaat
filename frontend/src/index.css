@@ -1,0 +1,176 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Smooth, predictable typography sizing on mobile. */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color-scheme: dark;
+  }
+
+  /* ShopHaat dark marketplace canvas — uses native CSS so global styles
+   * don't depend on @apply for custom color utilities that the JIT may
+   * not have scanned yet on cold-start. */
+  body {
+    margin: 0;
+    font-family: theme("fontFamily.sans");
+    color: theme("colors.text.primary");
+    background-color: theme("colors.canvas.DEFAULT");
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4 {
+    font-family: theme("fontFamily.sans");
+    color: theme("colors.text.primary");
+    letter-spacing: -0.02em;
+  }
+
+  h1 { font-size: 1.875rem; line-height: 1.15; font-weight: 700; }
+  @media (min-width: 640px) { h1 { font-size: 2.25rem; } }
+  h2 { font-size: 1.5rem; line-height: 1.2; font-weight: 600; }
+  @media (min-width: 640px) { h2 { font-size: 1.875rem; } }
+  h3 { font-size: 1.125rem; line-height: 1.3; font-weight: 600; }
+  @media (min-width: 640px) { h3 { font-size: 1.25rem; } }
+  h4 { font-size: 1rem; font-weight: 600; }
+
+  /* Visible focus ring everywhere — saffron on the dark canvas. */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px theme("colors.canvas.DEFAULT"),
+                0 0 0 4px theme("colors.brand.DEFAULT");
+  }
+
+  /* Native form controls inherit modern colors. */
+  input[type="search"]::-webkit-search-cancel-button { display: none; }
+
+  /* Custom scrollbar — subtle, dark-theme tuned. */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background-color: theme("colors.border.subtle");
+    border-radius: 9999px;
+    border: 2px solid theme("colors.canvas.DEFAULT");
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 107, 61, 0.6);
+  }
+  * { scrollbar-color: theme("colors.border.subtle") transparent; scrollbar-width: thin; }
+
+  /* Selection color tied to brand. */
+  ::selection { background: rgba(255, 107, 61, 0.35); color: theme("colors.text.primary"); }
+}
+
+@layer components {
+  /* Card surface used across the app. */
+  .surface {
+    border-radius: 1rem;
+    background-color: theme("colors.surface.card");
+    border: 1px solid theme("colors.border.subtle");
+    box-shadow: 0 2px 8px rgba(0,0,0,0.32), 0 0 0 1px rgba(255,255,255,0.02);
+    transition: box-shadow 200ms ease;
+  }
+  .surface-interactive:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.40), 0 0 0 1px rgba(255,107,61,0.35);
+  }
+
+  /* Pill used for filter chips / status filters. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid theme("colors.border.subtle");
+    background-color: theme("colors.surface.card");
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+    color: theme("colors.text.secondary");
+    transition: all 200ms ease;
+  }
+  .chip:hover {
+    border-color: theme("colors.brand.DEFAULT");
+    color: theme("colors.text.primary");
+    transform: translateY(-1px);
+  }
+  .chip-active {
+    border-color: theme("colors.brand.DEFAULT");
+    background-color: rgba(255, 107, 61, 0.15);
+    color: theme("colors.brand.DEFAULT");
+    box-shadow: 0 1px 2px rgba(0,0,0,0.32);
+  }
+
+  /* Saffron CTA button. */
+  .btn-gradient {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #ffffff;
+    background-image: linear-gradient(135deg, #FF8A65 0%, #FF6B3D 60%, #E85A2C 100%);
+    box-shadow: 0 0 0 1px rgba(255,107,61,0.30), 0 8px 28px rgba(255,107,61,0.35);
+    transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .btn-gradient:hover {
+    background-image: linear-gradient(135deg, #FF6B3D 0%, #E85A2C 60%, #B84A26 100%);
+    transform: translateY(-1px);
+  }
+  .btn-gradient:active { transform: translateY(0); }
+  .btn-gradient:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    transform: none;
+  }
+
+  /* Modern card surface. */
+  .card-modern {
+    border-radius: 1rem;
+    border: 1px solid theme("colors.border.subtle");
+    background-color: theme("colors.surface.card");
+    box-shadow: 0 2px 8px rgba(0,0,0,0.32);
+  }
+
+  /* Animated hover lift. */
+  .hover-lift {
+    transition: all 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .hover-lift:hover {
+    transform: translateY(-0.25rem);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.40), 0 0 0 1px rgba(255,107,61,0.35);
+  }
+
+  /* Glassmorphism for sticky chrome. */
+  .glass {
+    background-color: rgba(13, 22, 38, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid theme("colors.border.subtle");
+  }
+
+  /* Skeleton shimmer overlay. */
+  .shimmer {
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 400px 100%;
+    background-repeat: no-repeat;
+    animation: shimmer 1.6s linear infinite;
+  }
+}

@@ -1,0 +1,94 @@
+# ─────────────────────────────────────────────────────────────
+# ShopHaat — Root .gitignore
+# Covers: OS junk, secrets, dev databases, build artifacts,
+# debug scripts, and local-only design references.
+# ─────────────────────────────────────────────────────────────
+
+# ── Pass 2 (sensitive — never commit) ────────────────────────
+# Live auth / session cookies captured during local testing
+cookies.txt
+
+# Real environment values (use .env.example as the template)
+backend/.env
+frontend/.env
+
+# Local development database (may contain real user data)
+backend/db.sqlite3
+backend/*.sqlite3
+backend/*.sqlite3-journal
+
+# ── Pass 1 (dev-only / build artifacts / debug scripts) ──────
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+backend/venv/
+backend/.venv/
+backend/env/
+.venv/
+venv/
+env/
+
+# Django
+backend/staticfiles/
+backend/media/
+backend/logs/
+*.log
+
+# Frontend build output
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+
+# Frontend dependencies
+frontend/node_modules/
+
+# Frontend env
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*.iml
+
+# OS / misc
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Debug / one-off scripts (kept out of the repo)
+test_*.py
+run_drf_upload*.py
+run_upload_local*.py
+
+# Design reference folder (not part of the build)
+Shophat_pixel_perfect_design/
+
+# Coverage / test artifacts
+.coverage
+coverage/
+htmlcov/
+.tox/
+.nox/
+
+# Docker / local-only runtime
+*.pid
+*.sock

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080F1C" />
+    <title>ShopHaat — Bangladesh's Trusted Marketplace</title>
+
+    <!--
+      Inline fallback so the user always sees the dark navy canvas even if
+      CSS or JS hasn't loaded yet (cold boot, slow network, JS error).
+      Tailwind tokens are: canvas #080F1C, elevated #0D1626, text #F8FAFC.
+    -->
+    <style>
+      html, body { background-color: #080F1C; color: #F8FAFC; margin: 0; }
+      body { font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif; }
+      #root:empty::before {
+        content: "Loading ShopHaat…";
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        font-size: 14px;
+        color: #94A3B8;
+        letter-spacing: 0.05em;
+      }
+      .preboot-error {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: #080F1C;
+        color: #F8FAFC;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#080F1C;color:#F8FAFC;font-family:system-ui;padding:24px;text-align:center;">
+        ShopHaat requires JavaScript to run. Please enable it in your browser.
+      </div>
+    </noscript>
+    <pre class="preboot-error" id="preboot-error"></pre>
+    <script>
+      // Surface any pre-mount errors (e.g. failed module load) so the user
+      // sees the real message instead of a blank white screen.
+      window.addEventListener("error", (e) => {
+        const el = document.getElementById("preboot-error");
+        if (!el) return;
+        el.style.display = "flex";
+        el.textContent = "[Boot error]\n" + (e.error?.stack || e.message || String(e));
+      });
+      window.addEventListener("unhandledrejection", (e) => {
+        const el = document.getElementById("preboot-error");
+        if (!el) return;
+        el.style.display = "flex";
+        el.textContent = "[Boot error] Unhandled rejection:\n" +
+          (e.reason?.stack || e.reason?.message || String(e.reason));
+      });
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
