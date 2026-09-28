@@ -73,9 +73,13 @@ export function NotificationBell({ destination = "/dashboard/notifications" }) {
   }
 
   return (
-    <div className="relative">
+    <div 
+      className="relative"
+      onMouseLeave={() => setOpen(false)}
+    >
       <button
         type="button"
+        onMouseEnter={() => setOpen(true)}
         onClick={(e) => {
           e.stopPropagation();
           setOpen((v) => !v);
@@ -93,10 +97,11 @@ export function NotificationBell({ destination = "/dashboard/notifications" }) {
 
       {open && (
         <div
-          className="absolute right-0 top-full z-modal mt-2 w-80 animate-fade-up overflow-hidden rounded-xl border border-border-subtle bg-canvas-elevated shadow-float"
+          className="absolute right-0 top-full z-modal pt-2 w-80"
           onClick={(e) => e.stopPropagation()}
         >
-          <header className="flex items-center justify-between border-b border-border-subtle bg-canvas px-4 py-2.5">
+          <div className="animate-fade-up overflow-hidden rounded-xl border border-border-subtle bg-canvas-elevated shadow-float">
+            <header className="flex items-center justify-between border-b border-border-subtle bg-canvas px-4 py-2.5">
             <p className="text-sm font-semibold text-text-primary">Notifications</p>
             {unread > 0 && (
               <button
@@ -146,6 +151,7 @@ export function NotificationBell({ destination = "/dashboard/notifications" }) {
           >
             View all
           </Link>
+          </div>
         </div>
       )}
     </div>

@@ -1,30 +1,27 @@
 import { Link } from "react-router-dom";
 import { FaBolt, FaTruck, FaStore, FaArrowRight, FaCircleCheck } from "react-icons/fa6";
 import { FaShieldAlt } from "react-icons/fa";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 /**
  * ShopHaat marketplace Hero.
  * Scales perfectly like an image (fixed aspect ratio) on all devices using CSS.
  */
 export function HeroBanner() {
-  // Use a simple window resize listener to calculate scale, which avoids ResizeObserver DOM collapse loops.
   const [scale, setScale] = useState(1);
+  const containerRef = useRef(null);
 
   useEffect(() => {
-    const handleResize = () => {
-      // Calculate scale based on window width.
-      // The design is ~1200px wide. Max scale 1.
-      const windowWidth = window.innerWidth;
-      // On mobile (window < 1280px), container is 100vw.
-      // On desktop (window >= 1280px), container is 1280px - padding.
-      const containerWidth = Math.min(windowWidth, 1280); 
-      setScale(Math.min(1, containerWidth / 1200));
-    };
-    
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        // Calculate scale based on the actual container width.
+        const containerWidth = entry.contentRect.width;
+        setScale(Math.min(1, containerWidth / 1200));
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
   }, []);
 
   return (
@@ -32,6 +29,7 @@ export function HeroBanner() {
       {/* We use a spacer to force the exact aspect ratio height so the container never collapses to 0. 
           The desktop banner is exactly 1200px by ~560px. */}
       <div 
+        ref={containerRef}
         className="relative w-full max-w-[1200px]"
         style={{ aspectRatio: "1200/560" }}
       >

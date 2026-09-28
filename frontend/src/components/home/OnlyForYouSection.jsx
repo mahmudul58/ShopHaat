@@ -8,6 +8,7 @@ import { useCart } from "../../hooks/useCart";
 import { useToast } from "../../hooks/useToast";
 import { useAuth } from "../../hooks/useAuth";
 import { fetchProducts } from "../../services/catalogService";
+import { ProductCard } from "../product/ProductCard";
 
 /**
  * "Only For You" — matches the ShopHaat reference exactly.
@@ -115,7 +116,7 @@ export function OnlyForYouSection({ products = [], isLoading = false }) {
                 <OnlyForYouSkeleton key={i} />
               ))
             : items.map((product) => (
-                <OnlyForYouCard
+                <ProductCard
                   key={product.id ?? product.slug}
                   product={product}
                 />
@@ -153,139 +154,7 @@ export function OnlyForYouSection({ products = [], isLoading = false }) {
   );
 }
 
-function OnlyForYouCard({ product }) {
-  const { addItem } = useCart();
-  const { showToast } = useToast();
-  const { isAuthenticated } = useAuth();
-  const navigate = useNavigate();
 
-  const oldPrice = parseFloat(product.min_price || product.base_price) || 0;
-  const discountPct = parseFloat(product.discount_percent) || 0;
-  const price = Math.round(discountPct > 0 ? oldPrice * (1 - discountPct / 100) : oldPrice);
-  const rating = parseFloat(product.average_rating || 0).toFixed(1);
-  const soldCount = product.total_sold ?? product.sales_count ?? 0;
-  const badgeText = soldCount >= 500 ? "Best Seller" : "Top Choice";
-  const badgeClass = soldCount >= 500 ? "bg-brand/10 text-brand" : "bg-info/10 text-info";
-  const thumbnail = product.thumbnail || product.image;
-  const merchant = product.seller?.store_name || "Verified Seller";
-
-  const handleAddToCart = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!isAuthenticated) {
-      navigate("/login");
-      return;
-    }
-    try {
-      const variantId = product.default_variant_id || product.id;
-      await addItem(variantId, 1);
-      showToast({ type: "success", message: "Item added to the cart" });
-    } catch (err) {
-      showToast({ type: "error", message: "Could not add to cart" });
-    }
-  };
-
-  const handleAddToWishlist = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!isAuthenticated) {
-      navigate("/login");
-      return;
-    }
-    showToast({ type: "success", message: "Item added to wishlist" });
-  };
-
-  return (
-    <Link to={`/products/${product.slug}`} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border-subtle bg-surface-card transition-all duration-200 hover:border-brand/50">
-      <div>
-        {/* Edge-to-edge image */}
-        <div className="relative aspect-square overflow-hidden bg-canvas">
-          {thumbnail ? (
-            <img
-              src={thumbnail}
-              alt={product.name}
-              loading="lazy"
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-sm text-text-muted">
-              No image
-            </div>
-          )}
-
-          {/* Discount pill (top-left) */}
-          {discountPct > 0 && (
-            <span className="absolute left-2.5 top-2.5 rounded-md bg-brand px-2 py-0.5 text-[11px] font-extrabold text-white">
-              -{Math.round(discountPct)}%
-            </span>
-          )}
-
-          {/* Wishlist heart (top-right) */}
-          <button
-            type="button"
-            aria-label="Add to wishlist"
-            onClick={handleAddToWishlist}
-            className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-canvas/80 text-text-secondary transition-colors hover:text-brand"
-          >
-            <FaRegHeart className="text-xs" />
-          </button>
-        </div>
-
-        {/* Card body */}
-        <div className="space-y-1 sm:space-y-1.5 p-2.5 sm:p-3.5">
-          {/* Merchant with verified tick */}
-          <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-medium text-state-success">
-            <FaCircleCheck className="text-[9px] sm:text-[10px]" />
-            <span className="text-text-secondary hidden sm:inline">Sold by</span>{" "}
-            <span className="text-state-success truncate">{merchant}</span>
-          </div>
-
-          {/* Title */}
-          <h4 className="truncate text-xs sm:text-[13px] md:text-sm font-bold text-text-primary">
-            {product.name || "Untitled product"}
-          </h4>
-
-          {/* Rating + sold count */}
-          <div className="flex items-center justify-between text-[10px] sm:text-xs text-text-secondary">
-            <span className="flex items-center gap-1 font-semibold text-text-primary">
-              <FaStar className="text-[10px] sm:text-xs text-amber-400" /> {rating}
-            </span>
-            <span>
-              {soldCount >= 1000
-                ? `${(soldCount / 1000).toFixed(1)}k sold`
-                : `${soldCount} sold`}
-            </span>
-          </div>
-
-          {/* Price block */}
-          <div className="mt-1 sm:mt-2 flex items-baseline gap-1.5 sm:gap-2">
-            <span className="text-sm sm:text-base md:text-[17px] font-bold text-text-primary">
-              ৳ {price.toLocaleString()}
-            </span>
-            {oldPrice > price && (
-              <span className="text-[9px] sm:text-xs text-text-secondary line-through">
-                ৳ {Math.round(oldPrice).toLocaleString()}
-              </span>
-            )}
-          </div>
-
-          {/* Cart button */}
-          <div className="mt-2.5 pt-1">
-            <button
-              type="button"
-              aria-label="Add to cart"
-              onClick={handleAddToCart}
-              className="flex w-full items-center justify-center gap-2 rounded-full border border-border-subtle bg-canvas py-1.5 text-[12px] sm:text-[13px] font-semibold text-text-primary transition-colors hover:border-brand hover:bg-brand hover:text-white"
-            >
-              <FaCartPlus className="text-sm" />
-              <span>Add to Cart</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-}
 
 function OnlyForYouSkeleton() {
   return (

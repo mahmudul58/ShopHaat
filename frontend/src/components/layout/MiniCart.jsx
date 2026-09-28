@@ -13,8 +13,9 @@ export function MiniCart({ isOpen, onClose }) {
   if (!isOpen || cart.items.length === 0) return null;
 
   return (
-    <div className="absolute right-0 top-full z-modal mt-2 w-80 rounded-2xl border border-border-subtle bg-canvas-elevated backdrop-blur-md shadow-float">
-      <div className="p-4">
+    <div className="absolute right-0 top-full z-modal pt-2 w-80">
+      <div className="rounded-2xl border border-border-subtle bg-canvas-elevated backdrop-blur-md shadow-float">
+        <div className="p-4">
         <ul className="max-h-64 divide-y divide-border-subtle overflow-y-auto">
               {cart.items.map((item) => {
                 const name = item.variant?.product?.name || "Product";
@@ -49,6 +50,7 @@ export function MiniCart({ isOpen, onClose }) {
               <Button className="w-full">View cart</Button>
             </Link>
 
+      </div>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { FaTimes } from "react-icons/fa";
 
 /**
@@ -17,7 +18,7 @@ export function MobileDrawer({ isOpen, onClose, title, children, side = "right" 
     };
   }, [isOpen, onClose]);
 
-  return (
+  return createPortal(
     <div
       className={`fixed inset-0 z-drawer ${isOpen ? "" : "pointer-events-none"}`}
       aria-hidden={!isOpen}
@@ -57,6 +58,7 @@ export function MobileDrawer({ isOpen, onClose, title, children, side = "right" 
         </div>
         <div className="flex-1 overflow-y-auto">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

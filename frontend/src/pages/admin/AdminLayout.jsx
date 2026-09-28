@@ -51,13 +51,8 @@ export function AdminLayout() {
           </div>
         </aside>
 
-        {/* Mobile content */}
-        <div className="lg:hidden">
-          <Outlet />
-        </div>
-
-        {/* Desktop content */}
-        <div className="hidden lg:block">
+        {/* Main content */}
+        <div className="min-w-0 overflow-x-auto">
           <Outlet />
         </div>
       </div>

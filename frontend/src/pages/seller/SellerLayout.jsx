@@ -71,10 +71,7 @@ export function SellerLayout() {
           </div>
         </aside>
 
-        <div className="lg:hidden">
-          <Outlet />
-        </div>
-        <div className="hidden lg:block">
+        <div className="min-w-0 overflow-x-auto">
           <Outlet />
         </div>
       </div>

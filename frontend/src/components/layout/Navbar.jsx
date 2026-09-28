@@ -82,7 +82,7 @@ export function Navbar() {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/10 border border-brand/30 text-brand transition-transform group-hover:scale-105">
             <FaStore className="h-5 w-5" />
           </div>
-          <span className="font-sans text-xl font-extrabold tracking-tight text-text-primary sm:text-2xl">
+          <span className="hidden sm:inline font-sans text-xl font-extrabold tracking-tight text-text-primary sm:text-2xl">
             Shop<span className="text-brand">Haat</span>
           </span>
         </Link>
@@ -246,7 +246,7 @@ export function Navbar() {
             <div className="flex items-center gap-2">
               <Link
                 to="/login"
-                className="hidden text-sm font-medium text-text-secondary transition-colors hover:text-brand sm:inline"
+                className="text-sm font-medium text-text-secondary transition-colors hover:text-brand"
               >
                 Log in
               </Link>
