@@ -88,17 +88,32 @@ export function Navbar() {
         </Link>
 
         {/* Categories trigger (desktop) */}
-        <button
-          type="button"
-          onClick={() => setIsMegaOpen((v) => !v)}
-          aria-haspopup="menu"
-          aria-expanded={isMegaOpen}
-          className="hidden items-center gap-1.5 rounded-lg border border-border-subtle bg-canvas px-3 py-1.5 text-sm font-medium text-text-primary transition-colors hover:border-brand/50 md:inline-flex"
+        <div 
+          className="hidden md:flex self-stretch items-center"
+          onMouseEnter={() => {
+            clearTimeout(window.megaMenuTimer);
+            setIsMegaOpen(true);
+          }}
+          onMouseLeave={() => {
+            window.megaMenuTimer = setTimeout(() => setIsMegaOpen(false), 200);
+          }}
         >
-          <FaBars className="h-3.5 w-3.5 text-brand" />
-          Categories
-          <FaChevronDown className="h-3 w-3 text-text-secondary" />
-        </button>
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={isMegaOpen}
+            className="flex items-center gap-1.5 rounded-lg border border-border-subtle bg-canvas px-3 py-1.5 text-sm font-medium text-text-primary transition-colors hover:border-brand/50"
+          >
+            <FaBars className="h-3.5 w-3.5 text-brand" />
+            Categories
+          </button>
+          
+          <MegaMenu
+            categories={categories}
+            isOpen={isMegaOpen}
+            onClose={() => setIsMegaOpen(false)}
+          />
+        </div>
 
         {/* Search */}
         <div className="flex-1 min-w-0 px-2 sm:px-4">
@@ -262,14 +277,7 @@ export function Navbar() {
       </div>
 
 
-      {/* Mega menu (desktop only) */}
-      <MegaMenu
-        categories={categories}
-        isOpen={isMegaOpen}
-        onClose={() => setIsMegaOpen(false)}
-      />
 
-      {/* Mobile drawer */}
       <MobileDrawer
         isOpen={isMobileOpen}
         onClose={() => setIsMobileOpen(false)}

@@ -19,11 +19,12 @@ ShopHaat is a complete marketplace web application where buyers can browse curat
 ## ✨ Features
 
 ### 🛍️ For Buyers
-- **Extensive Catalog:** Browse products with search and category navigation.
+- **Extensive Catalog:** Browse products with smart live-autocomplete search and seamless category navigation.
 - **Rich Product Pages:** View detailed product descriptions, user reviews, ratings, and related items.
 - **Seamless Shopping:** Enjoy a persistent cart and wishlist across sessions.
-- **Easy Checkout:** Multi-step checkout.
+- **Easy Checkout:** Streamlined multi-step checkout with Cash on Delivery.
 - **Order Tracking & Savings:** Support for coupon codes and complete order history.
+- **Responsive Experience:** Fully optimized mobile and desktop shopping experience with modern interactive UI components.
 
 ### 🏪 For Sellers
 - **Dedicated Dashboard:** Manage inventory, products, and incoming orders seamlessly.
