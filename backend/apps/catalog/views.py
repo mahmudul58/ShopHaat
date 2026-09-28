@@ -1,8 +1,10 @@
 from decimal import Decimal
 
+from django.core.cache import cache
 from django.db.models import Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters as drf_filters, permissions, viewsets
+from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.core.permissions import IsApprovedSeller, IsStaffOrAdmin, ReadOnlyOrStaff
@@ -21,12 +23,48 @@ from .serializers import (
     SubCategorySerializer,
 )
 
+# Read-heavy public catalog data (categories, brands, first page of products)
+# is cached briefly so the home page and top-nav don't pound the DB on every
+# visitor. Cache TTLs are deliberately short — long enough to absorb spikes,
+# short enough that staff edits land within a minute.
+CATEGORY_LIST_CACHE_TTL = 60   # seconds
+BRAND_LIST_CACHE_TTL = 60     # seconds
+HOME_PRODUCTS_CACHE_TTL = 30  # seconds
+HOME_PRODUCTS_CACHE_KEY = "catalog:home:products:v1"
+
 
 class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.filter(is_active=True).prefetch_related("subcategories")
     serializer_class = CategorySerializer
     permission_classes = [ReadOnlyOrStaff]
     lookup_field = "slug"
+
+    def get_queryset(self):
+        return Category.objects.filter(is_active=True).prefetch_related("subcategories")
+
+    def list(self, request, *args, **kwargs):
+        # Public nav/category list — cached briefly. Staff writes invalidate
+        # the key below in perform_* hooks.
+        if request.method != "GET":
+            return super().list(request, *args, **kwargs)
+        cache_key = "catalog:categories:list:v1"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+        response = super().list(request, *args, **kwargs)
+        cache.set(cache_key, response.data, CATEGORY_LIST_CACHE_TTL)
+        return response
+
+    def perform_create(self, serializer):
+        serializer.save()
+        cache.delete("catalog:categories:list:v1")
+
+    def perform_update(self, serializer):
+        serializer.save()
+        cache.delete("catalog:categories:list:v1")
+
+    def perform_destroy(self, instance):
+        instance.delete()
+        cache.delete("catalog:categories:list:v1")
 
 
 class SubCategoryViewSet(viewsets.ModelViewSet):
@@ -46,19 +84,53 @@ class SubCategoryViewSet(viewsets.ModelViewSet):
             qs = qs.filter(category__slug=category)
         return qs
 
+    def perform_create(self, serializer):
+        serializer.save()
+        cache.delete("catalog:categories:list:v1")
+
+    def perform_update(self, serializer):
+        serializer.save()
+        cache.delete("catalog:categories:list:v1")
+
+    def perform_destroy(self, instance):
+        instance.delete()
+        cache.delete("catalog:categories:list:v1")
+
 
 class BrandViewSet(viewsets.ModelViewSet):
-    queryset = Brand.objects.all()
     serializer_class = BrandSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     lookup_field = "slug"
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = Brand.objects.prefetch_related("categories").all()
         category = self.request.GET.get("category")
         if category:
             qs = qs.filter(categories__slug=category).distinct()
         return qs
+
+    def list(self, request, *args, **kwargs):
+        if request.method != "GET":
+            return super().list(request, *args, **kwargs)
+        cache_key = "catalog:brands:list:v1"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+        response = super().list(request, *args, **kwargs)
+        cache.set(cache_key, response.data, BRAND_LIST_CACHE_TTL)
+        return response
+
+    def perform_create(self, serializer):
+        serializer.save()
+        cache.delete("catalog:brands:list:v1")
+
+    def perform_update(self, serializer):
+        serializer.save()
+        cache.delete("catalog:brands:list:v1")
+
+    def perform_destroy(self, instance):
+        instance.delete()
+        cache.delete("catalog:brands:list:v1")
 
 
 class IsProductOwnerOrStaff(permissions.BasePermission):
@@ -92,12 +164,16 @@ class ProductViewSet(viewsets.ModelViewSet):
         qs = Product.objects.select_related(
             "brand", "subcategory__category", "seller"
         ).prefetch_related(
-            Prefetch("variants", queryset=ProductVariant.objects.all()),
-            "images",
+            Prefetch("variants", queryset=ProductVariant.objects.only(
+                "id", "product_id", "sku", "size", "color", "price_override", "stock"
+            )),
+            "images", "brand__categories"
         )
         if self.action == "list":
+            # Defer heavy text fields not used by ProductListSerializer.
+            qs = qs.defer("description", "short_description", "rejection_reason")
             user = self.request.user
-            seller_filter = self.request.query_params.get("seller")
+            seller_filter = self.request.GET.get("seller")
             is_own_store = (
                 user.is_authenticated 
                 and getattr(user, "role", None) == "seller" 

@@ -29,14 +29,8 @@ class Review(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["product", "user"], name="uniq_review_per_user_product"),
             models.CheckConstraint(check=Q(rating__gte=1) & Q(rating__lte=5), name="review_rating_range"),  # type: ignore
-            models.CheckConstraint(
-                check=Q(seller_rating__isnull=True) | (Q(seller_rating__gte=1) & Q(seller_rating__lte=5)),  # type: ignore
-                name="seller_rating_range"
-            ),
-            models.CheckConstraint(
-                check=Q(delivery_rating__isnull=True) | (Q(delivery_rating__gte=1) & Q(delivery_rating__lte=5)),  # type: ignore
-                name="delivery_rating_range"
-            ),
+            models.CheckConstraint(check=Q(seller_rating__isnull=True) | (Q(seller_rating__gte=1) & Q(seller_rating__lte=5)), name="seller_rating_range"),  # type: ignore
+            models.CheckConstraint(check=Q(delivery_rating__isnull=True) | (Q(delivery_rating__gte=1) & Q(delivery_rating__lte=5)), name="delivery_rating_range"),  # type: ignore
         ]
 
     def __str__(self):

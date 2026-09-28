@@ -20,11 +20,22 @@ class ReviewSerializer(serializers.ModelSerializer):
 
 
 class ReviewCreateSerializer(serializers.ModelSerializer):
+    # Range validation at the serializer layer so out-of-range input
+    # returns a clean 400 instead of leaking the DB CHECK constraint as a
+    # 500. See BUG-REV-001.
+    rating = serializers.IntegerField(min_value=1, max_value=5)
+    seller_rating = serializers.IntegerField(
+        min_value=1, max_value=5, required=False, allow_null=True
+    )
+    delivery_rating = serializers.IntegerField(
+        min_value=1, max_value=5, required=False, allow_null=True
+    )
+
     class Meta:
         model = Review
         fields = [
-            "id", "rating", "comment", 
-            "seller_rating", "seller_comment", 
+            "id", "rating", "comment",
+            "seller_rating", "seller_comment",
             "delivery_rating", "delivery_comment"
         ]
 

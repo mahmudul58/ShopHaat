@@ -50,6 +50,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Optional — only logs when REQUEST_TIMING_ENABLED=True on Render.
+    "apps.core.middleware.RequestTimingMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -75,10 +77,50 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": dj_database_url.config(
         default=config("DATABASE_URL", default="postgres://postgres:@127.0.0.1:5432/ShopHaat"),
-        conn_max_age=600,
+        conn_max_age=config("DB_CONN_MAX_AGE", default=60, cast=int),
         conn_health_checks=True,
     )
 }
+
+# Supabase's Transaction pooler (PgBouncer in transaction mode) does not
+# support named server-side cursors. With `DISABLE_SERVER_SIDE_CURSORS=True`
+# Django falls back to client-side cursors which work fine through the
+# pooler. This setting is a no-op on the Session pooler and on direct
+# connections, so it's safe to enable unconditionally in production.
+# Reference: https://docs.djangoproject.com/en/5.0/ref/settings/#disable-server-side-cursors
+if config("DJANGO_DISABLE_SERVER_SIDE_CURSORS", default=False, cast=bool):
+    DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
+
+# Render terminates TLS at the load balancer and proxies plain HTTP to
+# gunicorn, so request.is_secure() returns False even on HTTPS URLs. Tell
+# Django to trust the X-Forwarded-Proto header so generated absolute URLs
+# (e.g. for product images) come back as https://.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Production-only hardening. Keeping these conditional on DEBUG=False
+# means local dev over http://localhost still works without TLS gymnastics.
+# On Render every request hits Django via TLS-terminated proxy, so these
+# are always active there.
+if not DEBUG:
+    # Render is HTTPS-only, so all session/cookie flags can safely be
+    # secure. Without these, `manage.py check --deploy` warns and a MITM
+    # on the local network could steal the CSRF token.
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # Don't redirect http→https at the Django layer — Render's load balancer
+    # already does this. Forcing it here would loop the redirect.
+    SECURE_SSL_REDIRECT = False
+    SECURE_REDIRECT_EXEMPT = [r"^health/", r"^api/health/"]
+    # HSTS: 1 year, include subdomains, eligible for preload. Render's
+    # load balancer terminates TLS, so this HSTS header travels with
+    # every response.
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    # Defensive headers — Render doesn't set these for us.
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = "same-origin"
+    X_FRAME_OPTIONS = "DENY"
 
 AUTH_USER_MODEL = "accounts.User"
 
@@ -173,7 +215,7 @@ REFRESH_COOKIE_NAME = "refresh_token"
 # earlier /api/v1/auth/ path and left stale cookies in the browser.
 REFRESH_COOKIE_PATH = "/"
 REFRESH_COOKIE_SECURE = not DEBUG  # allow http cookie only in local dev
-REFRESH_COOKIE_SAMESITE = "Lax"   # works because requests are same-origin via the Vite proxy
+REFRESH_COOKIE_SAMESITE = config("REFRESH_COOKIE_SAMESITE", default="Lax" if DEBUG else "None")
 
 # --- Email (console backend by default; swap for SMTP in production) ---
 EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
@@ -187,5 +229,6 @@ LOGGING = {
     "loggers": {
         "django.request": {"handlers": ["console"], "level": "ERROR", "propagate": False},
         "apps": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "apps.request_timing": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }

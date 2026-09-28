@@ -103,10 +103,14 @@ class CancelOrderView(APIView):
                     continue
 
     def patch(self, request, order_number):
+        from django.http import Http404
+        # Closes BUG-ORD-001: a missing order_number and an order_number
+        # belonging to another user must produce the same 404 response so
+        # the endpoint cannot be used for order-existence enumeration.
         try:
             order = Order.objects.get(order_number=order_number, user=request.user)
         except Order.DoesNotExist:
-            raise ValidationError({"order_number": "Order not found."})
+            raise Http404("Order not found.")
 
         if order.status not in {"PENDING", "CONFIRMED"}:
             raise ConflictError("Order cannot be cancelled at this stage.")
@@ -124,10 +128,13 @@ class CustomerReturnRequestView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, order_number):
+        from django.http import Http404
+        # Same enumeration-resistance rule as the cancel endpoint. See
+        # BUG-ORD-001.
         try:
             order = Order.objects.get(order_number=order_number, user=request.user)
         except Order.DoesNotExist:
-            raise ValidationError({"order_number": "Order not found."})
+            raise Http404("Order not found.")
 
         if order.status != "DELIVERED":
             raise ConflictError("Only delivered orders are eligible for return.")
@@ -149,10 +156,11 @@ class AdminUpdateOrderStatusView(APIView):
     permission_classes = [IsStaffOrAdmin]
 
     def patch(self, request, order_number):
+        from django.http import Http404
         try:
             order = Order.objects.get(order_number=order_number)
         except Order.DoesNotExist:
-            raise ValidationError({"order_number": "Order not found."})
+            raise Http404("Order not found.")
 
         serializer = UpdateOrderStatusSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

@@ -199,6 +199,19 @@ def transition_seller_order(
                     setattr(ship, f, v)
         ship.save()
 
+    # Bust the per-seller dashboard cache so the next /seller/dashboard
+    # call returns the fresh counts/charts instead of a 30-60s stale one.
+    # Done here (and not in the view) so all transition entry points —
+    # seller, admin, customer return — are covered uniformly.
+    try:
+        from django.core.cache import cache
+        cache.delete(f"seller-dashboard:{seller_order.seller_id}")
+        cache.delete(f"seller-dashboard-charts:{seller_order.seller_id}")
+        cache.delete(f"seller-earnings:{seller_order.seller_id}")
+    except Exception:
+        # Cache backend not configured in tests; never block a transition.
+        pass
+
     return seller_order
 
 
@@ -218,69 +231,95 @@ def notify(recipient, *, target_role: str, title: str, body: str = "", link: str
 # ──────────────────────────────────────────────────────────────────────────
 
 def seller_dashboard_summary(seller: SellerProfile) -> dict:
-    """Real-data seller dashboard summary. No hardcoded numbers."""
+    """Real-data seller dashboard summary. No hardcoded numbers.
+
+    The previous implementation iterated `product.variants.all()` in a
+    Python loop and fired one query per row. With 200+ products that
+    is enough to push the dashboard past Render's gunicorn timeout on
+    the Free plan. We now do the low-stock lookup as a single DB-side
+    query that joins Product + Variant in one go."""
     seller_orders = seller.seller_orders.all()  # type: ignore
-    delivered = seller_orders.filter(status=SellerOrder.STATUS_DELIVERED)
 
     totals = seller_orders.aggregate(
         total_sales=Sum("subtotal"),
         total_commission=Sum("commission_amount"),
         total_earnings=Sum("seller_earning"),
     )
-
-    low_stock_threshold = 10
-    variants = seller.products.exclude(is_active=False).prefetch_related("variants").all()  # type: ignore
-    low_stock = []
-    total_products = seller.products.filter(is_active=True).count()  # type: ignore
-
-    for product in variants:
-        for v in product.variants.all():
-            if v.stock <= low_stock_threshold:
-                low_stock.append({
-                    "product_id": product.id,
-                    "product_slug": product.slug,
-                    "product_name": product.name,
-                    "variant_id": v.id,
-                    "sku": v.sku,
-                    "stock": v.stock,
-                    "is_out_of_stock": v.stock == 0,
-                })
-
-    by_status = list(
-        seller_orders.values("status").annotate(count=Count("id")).order_by("status")
+    # Combine delivered/cancelled/total counts into a single grouped
+    # query instead of three separate COUNT() round-trips.
+    counts = seller_orders.aggregate(
+        total=Count("id"),
+        delivered=Count("id", filter=Q(status=SellerOrder.STATUS_DELIVERED)),
+        cancelled=Count("id", filter=Q(status=SellerOrder.STATUS_CANCELLED)),
     )
-    # Pad with zeros for every known status so the dashboard can render
-    # every tab even if some have no rows.
-    by_status_map = {row["status"]: row["count"] for row in by_status}
-    by_status_full = [
-        {"status": code, "label": label, "count": by_status_map.get(code, 0)}
-        for code, label in SellerOrder.STATUS_CHOICES
-    ]
 
-    settlement = seller.seller_orders.aggregate(  # type: ignore
+    settlement = seller_orders.aggregate(
         pending_amount=Sum(
             "seller_earning",
             filter=~Q(status__in=[
                 SellerOrder.STATUS_DELIVERED,
                 SellerOrder.STATUS_REFUNDED,
             ]),
-        )
+        ),
+        paid_settlement=Sum(
+            "seller_earning",
+            filter=Q(settlement_status="PAID"),
+        ),
     )
+
+    by_status = list(
+        seller_orders.values("status").annotate(count=Count("id")).order_by("status")
+    )
+    by_status_map = {row["status"]: row["count"] for row in by_status}
+    by_status_full = [
+        {"status": code, "label": label, "count": by_status_map.get(code, 0)}
+        for code, label in SellerOrder.STATUS_CHOICES
+    ]
+
+    # --- Low-stock: single grouped query ----------------------------------
+    LOW_STOCK_THRESHOLD = 10
+    from apps.catalog.models import ProductVariant
+
+    low_stock_qs = (
+        ProductVariant.objects.filter(
+            product__seller=seller,
+            product__is_active=True,
+            stock__lte=LOW_STOCK_THRESHOLD,
+        )
+        .select_related("product")
+        .order_by("stock", "id")[:10]
+    )
+    low_stock_products = [
+        {
+            "product_id": v.product_id,
+            "product_slug": v.product.slug,
+            "product_name": v.product.name,
+            "variant_id": v.id,
+            "sku": v.sku,
+            "stock": v.stock,
+            "is_out_of_stock": v.stock == 0,
+        }
+        for v in low_stock_qs
+    ]
+    low_stock_count = ProductVariant.objects.filter(
+        product__seller=seller,
+        product__is_active=True,
+        stock__lte=LOW_STOCK_THRESHOLD,
+    ).count()
+    total_products = seller.products.filter(is_active=True).count()  # type: ignore
 
     return {
         "total_sales": totals["total_sales"] or Decimal("0.00"),
         "total_earnings": totals["total_earnings"] or Decimal("0.00"),
         "total_commission": totals["total_commission"] or Decimal("0.00"),
-        "total_orders": seller_orders.count(),
-        "delivered_orders": delivered.count(),
-        "cancelled_orders": seller_orders.filter(status=SellerOrder.STATUS_CANCELLED).count(),
+        "total_orders": counts["total"] or 0,
+        "delivered_orders": counts["delivered"] or 0,
+        "cancelled_orders": counts["cancelled"] or 0,
         "pending_settlement": settlement["pending_amount"] or Decimal("0.00"),
-        "paid_settlement": seller_orders.filter(
-            settlement_status="PAID",
-        ).aggregate(s=Sum("seller_earning"))["s"] or Decimal("0.00"),
+        "paid_settlement": settlement["paid_settlement"] or Decimal("0.00"),
         "total_products": total_products,
-        "low_stock_products": low_stock[:10],
-        "low_stock_count": len(low_stock),
+        "low_stock_products": low_stock_products,
+        "low_stock_count": low_stock_count,
         "orders_by_status": by_status_full,
     }
 
@@ -407,12 +446,19 @@ def admin_top_sellers():
 
 def admin_top_products():
     from apps.catalog.models import Product
+    # Aggregate over OrderItem rows attached to a variant of the product.
+    # Previously this used a non-existent `seller_orders` reverse relation
+    # and threw FieldError (BUG-BIZ-001).
     rows = (
-        Product.objects.exclude(seller_orders__isnull=True)
+        Product.objects.filter(variants__order_items__isnull=False)
         .annotate(
-            units_sold=Sum("seller_orders__items__quantity"),
-            revenue=Sum("seller_orders__items__unit_price_snapshot"),
+            units_sold=Sum("variants__order_items__quantity"),
+            revenue=Sum(
+                F("variants__order_items__unit_price_snapshot")
+                * F("variants__order_items__quantity")
+            ),
         )
+        .distinct()
         .order_by("-units_sold")[:10]
     )
     return [

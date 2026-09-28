@@ -6,12 +6,27 @@ from rest_framework import serializers
 
 from .models import Address, User
 
+# Fields a customer can never change via the API. Surfaced as a 400 if
+# present so the API behaviour is explicit (BUG-AUTH-001).
+READONLY_PROFILE_FIELDS = ("email", "role", "is_staff", "is_superuser", "is_active")
+
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "email", "full_name", "phone", "role", "avatar", "created_at"]
         read_only_fields = ["id", "email", "role", "created_at"]
+
+    def to_internal_value(self, data):
+        # Make mass-assignment guards explicit (BUG-AUTH-001). The default
+        # behaviour silently dropped these — confusing for clients and a
+        # foot-gun. We now raise 400 with a clear message.
+        for f in READONLY_PROFILE_FIELDS:
+            if f in data:
+                raise serializers.ValidationError(
+                    {f: "This field is read-only and cannot be modified."}
+                )
+        return super().to_internal_value(data)
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -20,6 +35,14 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "email", "password", "full_name", "phone"]
+
+    def to_internal_value(self, data):
+        for f in ("role", "is_staff", "is_superuser", "is_active"):
+            if f in data:
+                raise serializers.ValidationError(
+                    {f: "This field cannot be set during registration."}
+                )
+        return super().to_internal_value(data)
 
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)

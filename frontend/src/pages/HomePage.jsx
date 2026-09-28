@@ -30,25 +30,25 @@ export function HomePage() {
   });
 
   useEffect(() => {
-    fetchCategories()
-      .then((data) => setCategories(data.results || data))
-      .catch(() => setCategories([]));
-  }, []);
+    let cancelled = false;
 
-  useEffect(() => {
+    fetchCategories()
+      .then((data) => { if (!cancelled) setCategories(data.results || data); })
+      .catch(() => { if (!cancelled) setCategories([]); });
+
     // Flash sale — top 5 by biggest discount (highest base_price first).
     fetchProducts({ ordering: "-base_price", page_size: 5 })
-      .then((data) => setFlashSale(data.results || []))
-      .catch(() => setFlashSale([]))
-      .finally(() => setLoading((l) => ({ ...l, flash: false })));
-  }, []);
+      .then((data) => { if (!cancelled) setFlashSale(data.results || []); })
+      .catch(() => { if (!cancelled) setFlashSale([]); })
+      .finally(() => { if (!cancelled) setLoading((l) => ({ ...l, flash: false })); });
 
-  useEffect(() => {
     // "Only For You" — Mix of categories, sorted by highest sales.
     fetchProducts({ ordering: "-sales_count", page_size: 24 })
-      .then((data) => setOnlyForYou(data.results || []))
-      .catch(() => setOnlyForYou([]))
-      .finally(() => setLoading((l) => ({ ...l, onlyForYou: false })));
+      .then((data) => { if (!cancelled) setOnlyForYou(data.results || []); })
+      .catch(() => { if (!cancelled) setOnlyForYou([]); })
+      .finally(() => { if (!cancelled) setLoading((l) => ({ ...l, onlyForYou: false })); });
+
+    return () => { cancelled = true; };
   }, []);
 
   return (

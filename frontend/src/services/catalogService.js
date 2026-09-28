@@ -1,16 +1,17 @@
 import { apiClient } from "./apiClient";
+import { createCachedFetcher } from "../utils/fetchCache";
 
 const SILENT = { skipErrorToast: true };
 
-export async function fetchCategories() {
+export const fetchCategories = createCachedFetcher(async () => {
   const { data } = await apiClient.get("/categories/", SILENT);
   return data.results || data;
-}
+}, 60000); // cache for 60 seconds
 
-export async function fetchBrands() {
+export const fetchBrands = createCachedFetcher(async () => {
   const { data } = await apiClient.get("/brands/", SILENT);
   return data.results || data;
-}
+}, 60000);
 
 // ──────────────────────────────────────────────────────────────────────────
 // Admin catalog management (writes)

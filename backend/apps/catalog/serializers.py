@@ -34,15 +34,32 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 class ProductImageSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
     image = serializers.ImageField(write_only=True, required=False)
+    image_url = serializers.URLField(required=False, allow_blank=False)
 
     class Meta:
         model = ProductImage
-        fields = ["id", "url", "image", "variant", "sort_order", "is_primary"]
+        fields = ["id", "url", "image", "image_url", "variant", "sort_order", "is_primary"]
 
     def get_url(self, obj):
         if obj.image:
             return obj.image.url
         return obj.image_url
+
+    def validate(self, attrs):
+        # XOR: exactly one of image / image_url must be present.
+        # Closes BUG-CAT-001 — the model.clean() XOR was never invoked
+        # from perform_create, so empty payloads silently created rows.
+        has_image = bool(attrs.get("image"))
+        has_url = bool(attrs.get("image_url"))
+        if not has_image and not has_url:
+            raise serializers.ValidationError(
+                {"image": "Provide either an uploaded image or an image_url."}
+            )
+        if has_image and has_url:
+            raise serializers.ValidationError(
+                {"image": "Provide either an uploaded image or an image_url, not both."}
+            )
+        return attrs
 
 
 class SellerSummarySerializer(serializers.Serializer):
@@ -74,13 +91,29 @@ class ProductListSerializer(serializers.ModelSerializer):
             "default_variant_id",
         ]
 
+    # The four SerializerMethodFields below each iterate `obj.variants.all()`
+    # which (thanks to the view's `Prefetch`) is in-memory, but iterating
+    # 3-4 times per row on a 20-row page is wasteful. We materialize the
+    # variant list once per row via `_variants()` and reuse it.
+    def _variants(self, obj):
+        try:
+            return obj._prefetched_objects_cache["variants"]
+        except (AttributeError, KeyError):
+            return list(obj.variants.all())
+
+    def _images(self, obj):
+        try:
+            return obj._prefetched_objects_cache["images"]
+        except (AttributeError, KeyError):
+            return list(obj.images.all())
+
     def get_default_variant_id(self, obj):
-        variant = obj.variants.first()
-        return variant.id if variant else None
+        variants = self._variants(obj)
+        return variants[0].id if variants else None
 
     def get_thumbnail(self, obj):
-        # Prefer a flagged primary image, fall back to the first image.
-        primary = next((i for i in obj.images.all() if i.is_primary), None) or obj.images.first()
+        images = self._images(obj)
+        primary = next((i for i in images if i.is_primary), None) or (images[0] if images else None)
         if primary:
             if primary.image:
                 return primary.image.url
@@ -88,25 +121,24 @@ class ProductListSerializer(serializers.ModelSerializer):
         return None
 
     def get_min_price(self, obj):
-        prices = [(v.price_override if v.price_override is not None else obj.base_price) for v in obj.variants.all()]
+        variants = self._variants(obj)
+        prices = [
+            (v.price_override if v.price_override is not None else obj.base_price)
+            for v in variants
+        ]
         return min(prices) if prices else obj.base_price
 
     def get_in_stock(self, obj):
-        return any(v.stock > 0 for v in obj.variants.all())
+        return any(v.stock > 0 for v in self._variants(obj))
 
     def get_total_stock(self, obj):
-        # Sum across every variant so the seller's table can show one
-        # concise "quantity in stock" number without an N+1 query.
-        return sum(v.stock for v in obj.variants.all())
+        return sum(v.stock for v in self._variants(obj))
 
     def get_seller(self, obj):
         if not obj.seller:
             return None
         s = obj.seller
-        request = self.context.get("request")
-        logo = None
-        if s.store_logo:
-            logo = s.store_logo.url
+        logo = s.store_logo.url if s.store_logo else None
         return {
             "id": s.id,
             "store_name": s.store_name,

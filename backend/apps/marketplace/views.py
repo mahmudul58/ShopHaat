@@ -137,26 +137,50 @@ class MySellerProfileView(generics.RetrieveUpdateAPIView):
 class SellerDashboardView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsApprovedSeller]
 
+    # The dashboard numbers are summary aggregates over SellerOrders and
+    # products — they don't change every second, but the front-end polls
+    # them on every page open. A 30-second in-process cache makes repeat
+    # visits effectively free and protects Render's single worker from
+    # a thundering-herd of identical SELECTs when a seller reloads.
+    CACHE_TTL_SECONDS = 30
+
     def get(self, request):
         seller = getattr(request.user, "seller_profile", None)
         if not seller:
             raise PermissionDenied("No seller profile")
-        summary = seller_dashboard_summary(seller)
-        summary["store_name"] = seller.store_name
-        summary["status"] = seller.status
-        summary["average_rating"] = seller.average_rating
-        summary["review_count"] = seller.review_count
+
+        from django.core.cache import cache
+
+        cache_key = f"seller-dashboard:{seller.pk}"
+        summary = cache.get(cache_key)
+        if summary is None:
+            summary = seller_dashboard_summary(seller)
+            # Annotate the per-seller fields BEFORE caching so a different
+            # seller's cached copy can never bleed into this response.
+            summary["store_name"] = seller.store_name
+            summary["status"] = seller.status
+            summary["average_rating"] = seller.average_rating
+            summary["review_count"] = seller.review_count
+            cache.set(cache_key, summary, self.CACHE_TTL_SECONDS)
         return Response(summary)
 
 
 class SellerDashboardChartsView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsApprovedSeller]
+    CACHE_TTL_SECONDS = 60  # Charts only update when an order transitions.
 
     def get(self, request):
         seller = getattr(request.user, "seller_profile", None)
         if not seller:
             raise PermissionDenied("No seller profile")
-        return Response(seller_dashboard_charts(seller))
+        from django.core.cache import cache
+
+        cache_key = f"seller-dashboard-charts:{seller.pk}"
+        payload = cache.get(cache_key)
+        if payload is None:
+            payload = seller_dashboard_charts(seller)
+            cache.set(cache_key, payload, self.CACHE_TTL_SECONDS)
+        return Response(payload)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -301,11 +325,21 @@ class SellerOrderViewSet(viewsets.ReadOnlyModelViewSet):
         seller = getattr(self.request.user, "seller_profile", None)
         if not seller:
             return SellerOrder.objects.none()
+        # `seller` is included in select_related because SellerOrderSerializer
+        # exposes `seller_name` (=seller.store_name). Without it, every
+        # serialized row fired an extra SELECT against marketplace_sellerprofile
+        # — a classic N+1 that pushed the seller Orders page past Render's
+        # gunicorn timeout on the Free plan.
+        #
+        # `status_history__changed_by` is prefetched because
+        # SellerOrderStatusHistorySerializer exposes `changed_by_email`
+        # (=history.changed_by.email) and the FK was triggering one
+        # SELECT per row otherwise.
         qs = SellerOrder.objects.filter(seller=seller).select_related(
-            "order", "order__user", "shipment"
+            "order", "order__user", "shipment", "seller"
         ).prefetch_related(
             "items__variant__product__images",
-            "status_history",
+            "status_history__changed_by",
         ).annotate(
             is_delivered=Case(
                 When(status="DELIVERED", then=Value(1)),
@@ -373,10 +407,10 @@ class AdminSellerOrderListView(generics.ListAPIView):
     def get_queryset(self):
         from django.db.models import Case, When, Value, IntegerField
         qs = SellerOrder.objects.select_related(
-            "order", "order__user", "seller", "shipment"
+            "order", "order__user", "seller", "seller__user", "shipment"
         ).prefetch_related(
             "items__variant__product__images",
-            "status_history",
+            "status_history__changed_by",
         ).annotate(
             is_delivered=Case(
                 When(status="DELIVERED", then=Value(1)),
@@ -384,7 +418,7 @@ class AdminSellerOrderListView(generics.ListAPIView):
                 output_field=IntegerField(),
             )
         ).order_by("is_delivered", "-created_at")
-        
+
         params = self.request.GET
         if params.get("status"):
             qs = qs.filter(status=params["status"])
@@ -398,7 +432,9 @@ class AdminSellerOrderDetailView(generics.RetrieveAPIView):
     permission_classes = [IsStaffOrAdmin]
     queryset = SellerOrder.objects.select_related(
         "order", "order__user", "seller", "shipment"
-    ).prefetch_related("items__variant__product__images", "status_history")
+    ).prefetch_related(
+        "items__variant__product__images", "status_history__changed_by"
+    )
 
 
 class AdminSellerOrderTransitionView(APIView):
@@ -447,26 +483,45 @@ class AdminShipmentViewSet(viewsets.ModelViewSet):
 class SellerEarningsView(APIView):
     """Per-seller earnings summary. Same shape the dashboard card uses."""
     permission_classes = [permissions.IsAuthenticated, IsApprovedSeller]
+    CACHE_TTL_SECONDS = 30
 
     def get(self, request):
         seller = getattr(request.user, "seller_profile", None)
         if not seller:
             raise PermissionDenied("No seller profile")
+
+        from django.core.cache import cache
+
+        cache_key = f"seller-earnings:{seller.pk}"
+        payload = cache.get(cache_key)
+        if payload is not None:
+            return Response(payload)
+
         seller_orders = SellerOrder.objects.filter(seller=seller)
-        totals = seller_orders.aggregate(
+        # One grouped aggregate instead of three round-trips.
+        sums = seller_orders.aggregate(
             gross=Sum("subtotal"),
             commission=Sum("commission_amount"),
             earnings=Sum("seller_earning"),
+            paid=Sum(
+                "seller_earning",
+                filter=Q(settlement_status="PAID"),
+            ),
         )
-        paid = seller_orders.filter(settlement_status="PAID").aggregate(s=Sum("seller_earning"))["s"] or Decimal("0.00")
-        pending = seller_orders.exclude(settlement_status="PAID").aggregate(s=Sum("seller_earning"))["s"] or Decimal("0.00")
-        return Response({
-            "total_sales": totals["gross"] or Decimal("0.00"),
-            "marketplace_commission": totals["commission"] or Decimal("0.00"),
-            "net_earnings": totals["earnings"] or Decimal("0.00"),
+        gross = sums["gross"] or Decimal("0.00")
+        commission = sums["commission"] or Decimal("0.00")
+        earnings = sums["earnings"] or Decimal("0.00")
+        paid = sums["paid"] or Decimal("0.00")
+        pending = earnings - paid
+        payload = {
+            "total_sales": gross,
+            "marketplace_commission": commission,
+            "net_earnings": earnings,
             "paid_settlement": paid,
             "pending_settlement": pending,
-        })
+        }
+        cache.set(cache_key, payload, self.CACHE_TTL_SECONDS)
+        return Response(payload)
 
 
 class SellerSettlementListView(generics.ListAPIView):
@@ -610,7 +665,17 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Notification.objects.filter(recipient=self.request.user)
+        # The NotificationSerializer doesn't expose any FK fields, but
+        # the default router also serves /unread_count/-style helpers in
+        # future. Keeping the recipient filter indexed and ordered by
+        # `-created_at` (model default) lets the existing
+        # (recipient, is_read) composite index serve the COUNT queries
+        # used by the seller dashboard polls.
+        return (
+            Notification.objects.filter(recipient=self.request.user)
+            .only("id", "title", "body", "link", "is_read", "target_role", "created_at")
+            .order_by("-created_at")
+        )
 
     @action(detail=False, methods=["post"])
     def mark_all_read(self, request):
@@ -728,8 +793,8 @@ class AdminSellerOrdersView(generics.ListAPIView):
     def get_queryset(self):
         seller = get_object_or_404(SellerProfile, pk=self.kwargs["pk"])
         return SellerOrder.objects.filter(seller=seller).select_related(
-            "order", "order__user", "shipment"
+            "order", "order__user", "shipment", "seller"
         ).prefetch_related(
             "items__variant__product__images",
-            "status_history",
+            "status_history__changed_by",
         ).order_by("-created_at")

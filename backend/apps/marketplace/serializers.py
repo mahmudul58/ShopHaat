@@ -293,7 +293,7 @@ class SellerOrderSerializer(serializers.ModelSerializer):
         ]
 
     def _items_for(self, obj):
-        return obj.items.select_related("variant__product").all()
+        return obj.items.all()
 
     def get_items(self, obj):
         out = []

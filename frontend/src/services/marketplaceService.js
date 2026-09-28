@@ -1,4 +1,5 @@
 import { apiClient } from "./apiClient";
+import { createCachedFetcher } from "../utils/fetchCache";
 
 // All service-layer calls opt out of the global toast interceptor.
 // Pages own their own error UX (inline form banner, retry button, etc.)
@@ -33,15 +34,15 @@ export async function updateSellerProfile(payload) {
 // Seller dashboard
 // ──────────────────────────────────────────────────────────────────────────
 
-export async function fetchSellerDashboard() {
+export const fetchSellerDashboard = createCachedFetcher(async () => {
   const { data } = await apiClient.get("/seller/dashboard/", SILENT);
   return data;
-}
+}, 30000); // 30 seconds
 
-export async function fetchSellerDashboardCharts() {
+export const fetchSellerDashboardCharts = createCachedFetcher(async () => {
   const { data } = await apiClient.get("/seller/dashboard/charts/", SILENT);
   return data;
-}
+}, 30000);
 
 export async function fetchSellerEarnings() {
   const { data } = await apiClient.get("/seller/earnings/", SILENT);
@@ -108,10 +109,10 @@ export async function fetchAdminSellerOrdersForSeller(id, params = {}) {
 // Admin — marketplace dashboard & seller-orders
 // ──────────────────────────────────────────────────────────────────────────
 
-export async function fetchAdminMarketplaceDashboard() {
+export const fetchAdminMarketplaceDashboard = createCachedFetcher(async () => {
   const { data } = await apiClient.get("/admin/dashboard/", SILENT);
   return data;
-}
+}, 30000);
 
 export async function fetchAdminSellerOrders(params = {}) {
   const { data } = await apiClient.get("/admin/seller-orders/", { params, ...SILENT });
@@ -215,10 +216,10 @@ export async function fetchStorefrontProducts(storeSlug, params = {}) {
 // Notifications
 // ──────────────────────────────────────────────────────────────────────────
 
-export async function fetchNotifications() {
+export const fetchNotifications = createCachedFetcher(async () => {
   const { data } = await apiClient.get("/notifications/", SILENT);
   return data.results ?? data;
-}
+}, 30000);
 
 export async function markNotificationRead(id) {
   const { data } = await apiClient.post(`/notifications/${id}/mark_read/`, null, SILENT);

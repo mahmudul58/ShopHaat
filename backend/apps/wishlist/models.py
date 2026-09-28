@@ -8,4 +8,5 @@ class WishlistItem(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        ordering = ["-created_at"]
         constraints = [models.UniqueConstraint(fields=["user", "product"], name="uniq_wishlist_user_product")]

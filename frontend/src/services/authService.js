@@ -1,4 +1,5 @@
 import { apiClient, setAccessToken } from "./apiClient";
+import { createCachedFetcher } from "../utils/fetchCache";
 
 // Form pages (LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage)
 // render their own inline error banner AND fire a toast — the global
@@ -31,13 +32,13 @@ export async function logout() {
   setAccessToken(null);
 }
 
-export async function fetchProfile() {
+export const fetchProfile = createCachedFetcher(async () => {
   // Silent: a failed profile fetch on initial load is handled by the
   // AuthContext restoreSession flow + 401 refresh interceptor, not by a
   // toast.
   const { data } = await apiClient.get("/auth/profile/", FORM_SILENT);
   return data;
-}
+}, 5000);
 
 export async function updateProfile(payload) {
   const { data } = await apiClient.patch("/auth/profile/", payload, FORM_SILENT);

@@ -77,7 +77,10 @@ export function OnlyForYouSection({ products = [], isLoading = false }) {
         setHasMore(false);
       }
     } catch (err) {
-      console.error("Failed to load more products:", err);
+      // Closes BUG-FE-002: the global api:error interceptor already fires
+      // a toast via ToastProvider. Keep this explicit toast for the
+      // pagination case where the page already has content on screen
+      // and the generic "Something went wrong" copy is too vague.
       showToast({ type: "error", message: "Could not load more products" });
     } finally {
       setIsLoadingMore(false);

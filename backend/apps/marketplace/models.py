@@ -309,6 +309,7 @@ class SellerOrder(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["seller", "status"]),
+            models.Index(fields=["seller", "-created_at"]),
             models.Index(fields=["order", "seller"]),
         ]
         constraints = [

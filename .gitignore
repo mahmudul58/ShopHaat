@@ -92,3 +92,7 @@ htmlcov/
 # Docker / local-only runtime
 *.pid
 *.sock
+.puku-cli/
+SHOPHAAT_FULL_TEST.md
+DEPLOYMENT_DEBUG_PROMPT.md
+Render_slow_fix.md

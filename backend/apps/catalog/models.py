@@ -9,9 +9,15 @@ class Category(models.Model):
     slug = models.SlugField(max_length=255, unique=True, db_index=True)
     image = models.ImageField(upload_to="categories/", blank=True, null=True)
     is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name_plural = "categories"
+        # Default ordering stops DRF's pagination warning
+        # ("UnorderedObjectListWarning: Pagination may yield inconsistent
+        # results...") and guarantees the navbar list is stable across
+        # page reloads.
+        ordering = ["sort_order", "name"]
 
     def __str__(self):
         return self.name
@@ -21,9 +27,11 @@ class SubCategory(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="subcategories")
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True)
+    sort_order = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name_plural = "subcategories"
+        ordering = ["sort_order", "name"]
         constraints = [models.UniqueConstraint(fields=["category", "name"], name="uniq_subcategory_per_category")]
 
     def __str__(self):
@@ -35,6 +43,9 @@ class Brand(models.Model):
     slug = models.SlugField(max_length=255, unique=True)
     logo = models.ImageField(upload_to="brands/", blank=True, null=True)
     categories = models.ManyToManyField(Category, related_name="brands", blank=True)
+
+    class Meta:
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
@@ -83,6 +94,7 @@ class Product(models.Model):
             models.Index(fields=["base_price"]),
             models.Index(fields=["average_rating"]),
             models.Index(fields=["created_at"]),
+            models.Index(fields=["sales_count"]),
         ]
         constraints = [models.CheckConstraint(check=Q(base_price__gte=0), name="product_price_non_negative")]  # type: ignore
 
