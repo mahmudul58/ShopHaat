@@ -20,11 +20,7 @@ const DEMO_ACCOUNTS = [
     email: "gadget-gear@example.com",
     password: "password123",
   },
-  {
-    role: "Seller · Star Tech",
-    email: "star-tech@example.com",
-    password: "password123",
-  },
+
   {
     role: "Admin",
     email: "admin@example.com",

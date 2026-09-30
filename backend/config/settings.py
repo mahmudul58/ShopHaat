@@ -52,6 +52,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Optional — only logs when REQUEST_TIMING_ENABLED=True on Render.
     "apps.core.middleware.RequestTimingMiddleware",
+    "config.middleware.DemoProtectMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
